@@ -1,0 +1,193 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nova-torch-orchestrator
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: orchestrator
+    version: "0.2.0"
+spec:
+  replicas: 3  # HA configuration
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: nova-torch
+      component: orchestrator
+  template:
+    metadata:
+      labels:
+        app: nova-torch
+        component: orchestrator
+        version: "0.2.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: nova-torch-orchestrator
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      initContainers:
+      - name: wait-for-dragonfly
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z dragonfly-service 6379; do echo waiting for dragonfly; sleep 2; done']
+        
+      containers:
+      - name: orchestrator
+        image: nova-torch/orchestrator:0.2.0
+        imagePullPolicy: Always
+        
+        ports:
+        - name: metrics
+          containerPort: 8000
+          protocol: TCP
+        - name: health
+          containerPort: 8001
+          protocol: TCP
+        - name: grpc
+          containerPort: 50051
+          protocol: TCP
+          
+        env:
+        - name: NOVA_TORCH_ROLE
+          value: "orchestrator"
+        - name: NOVA_TORCH_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: DRAGONFLY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nova-torch-secrets
+              key: dragonfly-password
+              
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+            ephemeral-storage: "10Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+            ephemeral-storage: "20Gi"
+            
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nova-torch
+          readOnly: true
+        - name: scripts
+          mountPath: /scripts
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /cache
+          
+      volumes:
+      - name: config
+        configMap:
+          name: nova-torch-config
+      - name: scripts
+        configMap:
+          name: nova-torch-scripts
+          defaultMode: 0755
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir:
+          sizeLimit: 5Gi
+          
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - nova-torch
+                - key: component
+                  operator: In
+                  values:
+                  - orchestrator
+              topologyKey: kubernetes.io/hostname
+              
+      tolerations:
+      - key: "nova-torch"
+        operator: "Equal"
+        value: "orchestrator"
+        effect: "NoSchedule"
+        
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nova-torch-orchestrator
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: orchestrator
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 8000
+    targetPort: metrics
+  - name: health
+    port: 8001
+    targetPort: health
+  - name: grpc
+    port: 50051
+    targetPort: grpc
+  selector:
+    app: nova-torch
+    component: orchestrator
+    
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nova-torch-orchestrator-pdb
+  namespace: nova-torch
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: nova-torch
+      component: orchestrator

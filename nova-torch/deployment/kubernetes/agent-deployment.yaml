@@ -1,0 +1,264 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nova-torch-agent
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: agent
+    version: "0.2.0"
+spec:
+  replicas: 5  # Start with 5 agents, HPA will scale as needed
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: nova-torch
+      component: agent
+  template:
+    metadata:
+      labels:
+        app: nova-torch
+        component: agent
+        version: "0.2.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: nova-torch-agent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      
+      initContainers:
+      - name: wait-for-orchestrator
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z nova-torch-orchestrator 50051; do echo waiting for orchestrator; sleep 2; done']
+        
+      containers:
+      - name: agent
+        image: nova-torch/agent:0.2.0
+        imagePullPolicy: Always
+        
+        ports:
+        - name: metrics
+          containerPort: 8000
+          protocol: TCP
+        - name: health
+          containerPort: 8001
+          protocol: TCP
+          
+        env:
+        - name: NOVA_TORCH_ROLE
+          value: "agent"
+        - name: AGENT_TYPE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['agent-type']
+        - name: NOVA_TORCH_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: DRAGONFLY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nova-torch-secrets
+              key: dragonfly-password
+        - name: ORCHESTRATOR_HOST
+          value: "nova-torch-orchestrator"
+        - name: ORCHESTRATOR_PORT
+          value: "50051"
+              
+        resources:
+          requests:
+            cpu: "0.5"
+            memory: "1Gi"
+            ephemeral-storage: "5Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+            ephemeral-storage: "10Gi"
+            
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nova-torch
+          readOnly: true
+        - name: workspace
+          mountPath: /workspace
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /cache
+          
+      volumes:
+      - name: config
+        configMap:
+          name: nova-torch-config
+      - name: workspace
+        emptyDir:
+          sizeLimit: 10Gi
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir:
+          sizeLimit: 5Gi
+          
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - nova-torch
+                - key: component
+                  operator: In
+                  values:
+                  - agent
+              topologyKey: kubernetes.io/hostname
+              
+      tolerations:
+      - key: "nova-torch"
+        operator: "Equal"
+        value: "agent"
+        effect: "NoSchedule"
+        
+---
+# Deployment for specialized developer agents
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nova-torch-developer-agent
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: agent
+    agent-type: developer
+    version: "0.2.0"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nova-torch
+      component: agent
+      agent-type: developer
+  template:
+    metadata:
+      labels:
+        app: nova-torch
+        component: agent
+        agent-type: developer
+        version: "0.2.0"
+    spec:
+      # Inherit most settings from base agent template
+      serviceAccountName: nova-torch-agent
+      containers:
+      - name: agent
+        image: nova-torch/agent:0.2.0
+        env:
+        - name: AGENT_TYPE
+          value: "developer"
+        - name: AGENT_CAPABILITIES
+          value: "code_generation,testing,debugging,refactoring"
+        # Rest inherited from base template
+        
+---
+# Deployment for project manager agents
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nova-torch-pm-agent
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: agent
+    agent-type: project-manager
+    version: "0.2.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nova-torch
+      component: agent
+      agent-type: project-manager
+  template:
+    metadata:
+      labels:
+        app: nova-torch
+        component: agent
+        agent-type: project-manager
+        version: "0.2.0"
+    spec:
+      serviceAccountName: nova-torch-agent
+      containers:
+      - name: agent
+        image: nova-torch/agent:0.2.0
+        env:
+        - name: AGENT_TYPE
+          value: "project_manager"
+        - name: AGENT_CAPABILITIES
+          value: "task_planning,coordination,quality_oversight,reporting"
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "3"
+            memory: "6Gi"
+        # Rest inherited from base template
+        
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nova-torch-agents
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: agent
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 8000
+    targetPort: metrics
+  - name: health
+    port: 8001
+    targetPort: health
+  selector:
+    app: nova-torch
+    component: agent

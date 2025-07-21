@@ -1,0 +1,53 @@
+[Unit]
+Description=Nova-Torch Orchestrator Service
+Documentation=https://github.com/TeamADAPT/nova-torch
+After=network.target dragonfly.service
+Wants=dragonfly.service
+
+[Service]
+Type=notify
+User=nova-torch
+Group=nova-torch
+WorkingDirectory=/opt/nova-torch
+Environment="DRAGONFLY_HOST=localhost"
+Environment="DRAGONFLY_PORT=18000"
+Environment="DRAGONFLY_PASS_FILE=/adaptai/ceo/secrets/dragonfly-password"
+Environment="NOVA_TORCH_CONFIG=/etc/nova-torch/config.yaml"
+Environment="PYTHONUNBUFFERED=1"
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/nova-torch /var/lib/nova-torch
+ReadOnlyPaths=/adaptai/ceo/secrets
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryLimit=2G
+CPUQuota=200%
+
+# Start command
+ExecStartPre=/usr/bin/python3 -m nova_torch.preflight_check
+ExecStart=/usr/bin/python3 -m nova_torch.orchestrator
+ExecReload=/bin/kill -USR1 $MAINPID
+ExecStop=/bin/kill -TERM $MAINPID
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Health check
+ExecStartPost=/usr/bin/python3 -m nova_torch.health_check --wait
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nova-torch-orchestrator
+
+[Install]
+WantedBy=multi-user.target

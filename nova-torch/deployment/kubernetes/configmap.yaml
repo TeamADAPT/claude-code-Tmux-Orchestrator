@@ -1,0 +1,114 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nova-torch-config
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: config
+    version: "0.2.0"
+data:
+  config.yaml: |
+    # Nova-Torch Configuration
+    system:
+      environment: production
+      log_level: INFO
+      metrics_port: 8000
+      health_port: 8001
+      
+    dragonfly:
+      host: dragonfly-service
+      port: 6379
+      db: 0
+      pool_size: 20
+      max_retries: 3
+      retry_delay: 1
+      
+    orchestrator:
+      name: "Torch"
+      id_prefix: "torch-orchestrator"
+      heartbeat_interval: 30
+      agent_timeout: 120
+      message_retry_count: 3
+      max_agents: 50
+      max_concurrent_tasks: 100
+      stream_max_length: 10000
+      
+    agent_registry:
+      heartbeat_timeout: 60
+      cleanup_interval: 300
+      enable_memory: true
+      
+    task_orchestrator:
+      max_queue_size: 1000
+      assignment_timeout: 30
+      requeue_failed_tasks: true
+      max_retry_attempts: 3
+      
+    agent_spawner:
+      max_spawn_rate: 10  # per minute
+      max_agents_per_role: 20
+      spawn_timeout: 60
+      resource_limits:
+        cpu: "2"
+        memory: "4Gi"
+        
+    collaboration:
+      max_team_size: 5
+      collaboration_timeout: 1800
+      request_timeout: 300
+      max_concurrent_collaborations: 50
+      
+    monitoring:
+      prometheus_enabled: true
+      health_check_interval: 10
+      metrics_retention: "7d"
+      
+    security:
+      enable_tls: true
+      enable_rbac: true
+      audit_logging: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nova-torch-scripts
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: scripts
+data:
+  healthcheck.sh: |
+    #!/bin/bash
+    # Health check script for Nova-Torch components
+    set -e
+    
+    # Check if service is responsive
+    if ! curl -f http://localhost:8001/health > /dev/null 2>&1; then
+      echo "Health check failed"
+      exit 1
+    fi
+    
+    # Check specific component health
+    HEALTH=$(curl -s http://localhost:8001/health | jq -r '.status')
+    if [ "$HEALTH" != "healthy" ] && [ "$HEALTH" != "warning" ]; then
+      echo "Service unhealthy: $HEALTH"
+      exit 1
+    fi
+    
+    echo "Health check passed"
+    exit 0
+    
+  readiness.sh: |
+    #!/bin/bash
+    # Readiness check script
+    set -e
+    
+    # Check if all critical services are ready
+    if ! curl -f http://localhost:8001/ready > /dev/null 2>&1; then
+      echo "Readiness check failed"
+      exit 1
+    fi
+    
+    echo "Service ready"
+    exit 0

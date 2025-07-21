@@ -1,0 +1,329 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "nova-torch-overview",
+    "title": "Nova-Torch Overview",
+    "description": "Main dashboard for Nova-Torch system monitoring",
+    "tags": ["nova-torch", "overview", "orchestrator"],
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "namespace",
+          "type": "query",
+          "query": "label_values(nova_torch_orchestrator_info, namespace)",
+          "refresh": 1,
+          "includeAll": false,
+          "multi": false,
+          "current": {
+            "value": "nova-torch",
+            "text": "nova-torch"
+          }
+        },
+        {
+          "name": "orchestrator",
+          "type": "query",
+          "query": "label_values(nova_torch_orchestrator_info{namespace=\"$namespace\"}, instance)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Health",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "nova_torch_system_health_status{namespace=\"$namespace\"}",
+            "legendFormat": "{{instance}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "Critical", "color": "red"},
+                  "1": {"text": "Warning", "color": "orange"},
+                  "2": {"text": "Healthy", "color": "green"}
+                },
+                "type": "value"
+              }
+            ],
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "orange", "value": 1},
+                {"color": "green", "value": 2}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Active Agents",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(nova_torch_agents_active{namespace=\"$namespace\"})",
+            "legendFormat": "Total Agents",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Task Queue Size",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(nova_torch_tasks_queued{namespace=\"$namespace\"})",
+            "legendFormat": "Queued Tasks",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "orange", "value": 100},
+                {"color": "red", "value": 500}
+              ]
+            },
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Tasks Completed/sec",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(nova_torch_tasks_completed_total{namespace=\"$namespace\"}[5m]))",
+            "legendFormat": "Completion Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Agent Activity Over Time",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "nova_torch_agents_active{namespace=\"$namespace\"}",
+            "legendFormat": "Active Agents - {{instance}}",
+            "refId": "A"
+          },
+          {
+            "expr": "nova_torch_agents_idle{namespace=\"$namespace\"}",
+            "legendFormat": "Idle Agents - {{instance}}",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "barAlignment": 0,
+              "lineWidth": 2,
+              "fillOpacity": 0.1,
+              "gradientMode": "none"
+            },
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Task Processing Rate",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(nova_torch_tasks_completed_total{namespace=\"$namespace\"}[5m])",
+            "legendFormat": "Completed - {{instance}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(nova_torch_tasks_failed_total{namespace=\"$namespace\"}[5m])",
+            "legendFormat": "Failed - {{instance}}",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "fillOpacity": 0.2
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Agent Types Distribution",
+        "type": "piechart",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 17},
+        "targets": [
+          {
+            "expr": "sum by (agent_type) (nova_torch_agents_active{namespace=\"$namespace\"})",
+            "legendFormat": "{{agent_type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              }
+            },
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Message Flow",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 17},
+        "targets": [
+          {
+            "expr": "rate(nova_torch_messages_sent_total{namespace=\"$namespace\"}[5m])",
+            "legendFormat": "Sent - {{instance}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(nova_torch_messages_received_total{namespace=\"$namespace\"}[5m])",
+            "legendFormat": "Received - {{instance}}",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(nova_torch_messages_broadcast_total{namespace=\"$namespace\"}[5m])",
+            "legendFormat": "Broadcast - {{instance}}",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear"
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Response Time Percentiles",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 26},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(nova_torch_response_time_seconds_bucket{namespace=\"$namespace\"}[5m]))",
+            "legendFormat": "50th percentile",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(nova_torch_response_time_seconds_bucket{namespace=\"$namespace\"}[5m]))",
+            "legendFormat": "95th percentile",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(nova_torch_response_time_seconds_bucket{namespace=\"$namespace\"}[5m]))",
+            "legendFormat": "99th percentile",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear"
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Resource Usage",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 26},
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",container=\"orchestrator\"}[5m]) * 100",
+            "legendFormat": "CPU Usage % - {{pod}}",
+            "refId": "A"
+          },
+          {
+            "expr": "container_memory_usage_bytes{namespace=\"$namespace\",container=\"orchestrator\"} / container_spec_memory_limit_bytes * 100",
+            "legendFormat": "Memory Usage % - {{pod}}",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear"
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "percent",
+            "max": 100,
+            "min": 0
+          }
+        }
+      }
+    ]
+  }
+}

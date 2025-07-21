@@ -1,0 +1,331 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "nova-torch-agents",
+    "title": "Nova-Torch Agent Performance",
+    "description": "Detailed monitoring of agent performance and behavior",
+    "tags": ["nova-torch", "agents", "performance"],
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "15s",
+    "time": {
+      "from": "now-30m",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "namespace",
+          "type": "query",
+          "query": "label_values(nova_torch_agents_active, namespace)",
+          "refresh": 1,
+          "includeAll": false,
+          "multi": false,
+          "current": {
+            "value": "nova-torch",
+            "text": "nova-torch"
+          }
+        },
+        {
+          "name": "agent_type",
+          "type": "query",
+          "query": "label_values(nova_torch_agents_active{namespace=\"$namespace\"}, agent_type)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Agent Pool Status",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "nova_torch_agents_active{namespace=\"$namespace\",agent_type=~\"$agent_type\"}",
+            "legendFormat": "",
+            "refId": "A",
+            "instant": true,
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "auto"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Value"},
+              "properties": [
+                {"id": "custom.displayMode", "value": "color-background"},
+                {"id": "color", "value": {"mode": "thresholds"}},
+                {"id": "thresholds", "value": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 1},
+                    {"color": "green", "value": 3}
+                  ]
+                }}
+              ]
+            }
+          ]
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "__name__": true,
+                "job": true,
+                "instance": true
+              },
+              "renameByName": {
+                "agent_id": "Agent ID",
+                "agent_type": "Type",
+                "pod": "Pod",
+                "Value": "Active Count"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Task Assignment Rate by Agent Type",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(nova_torch_tasks_assigned_total{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m])",
+            "legendFormat": "{{agent_type}} - {{agent_id}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "fillOpacity": 0.1
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Task Completion Rate by Agent Type",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(nova_torch_tasks_completed_total{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m])",
+            "legendFormat": "{{agent_type}} - {{agent_id}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "fillOpacity": 0.1
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Agent Task Execution Time",
+        "type": "heatmap",
+        "gridPos": {"h": 9, "w": 24, "x": 0, "y": 17},
+        "targets": [
+          {
+            "expr": "sum(rate(nova_torch_task_duration_seconds_bucket{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m])) by (le)",
+            "legendFormat": "{{le}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "scaleDistribution": {
+                "type": "linear"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Agent Success Rate",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 26},
+        "targets": [
+          {
+            "expr": "rate(nova_torch_tasks_completed_total{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m]) / (rate(nova_torch_tasks_completed_total{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m]) + rate(nova_torch_tasks_failed_total{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m])) * 100",
+            "legendFormat": "{{agent_type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "orange", "value": 80},
+                {"color": "green", "value": 95}
+              ]
+            },
+            "unit": "percent",
+            "max": 100,
+            "min": 0
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Average Task Duration",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 26},
+        "targets": [
+          {
+            "expr": "rate(nova_torch_task_duration_seconds_sum{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m]) / rate(nova_torch_task_duration_seconds_count{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m])",
+            "legendFormat": "{{agent_type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Agent Memory Usage",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 26},
+        "targets": [
+          {
+            "expr": "nova_torch_agent_memory_usage_bytes{namespace=\"$namespace\",agent_type=~\"$agent_type\"} / 1024 / 1024",
+            "legendFormat": "{{agent_id}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear"
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "MB"
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Agent CPU Usage",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 26},
+        "targets": [
+          {
+            "expr": "nova_torch_agent_cpu_usage_percent{namespace=\"$namespace\",agent_type=~\"$agent_type\"}",
+            "legendFormat": "{{agent_id}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear"
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "percent",
+            "max": 100,
+            "min": 0
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Collaboration Requests",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 34},
+        "targets": [
+          {
+            "expr": "rate(nova_torch_collaboration_requests_total{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m])",
+            "legendFormat": "Requests - {{agent_type}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(nova_torch_collaboration_responses_total{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m])",
+            "legendFormat": "Responses - {{agent_type}}",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear"
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Agent Spawning Events",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 34},
+        "targets": [
+          {
+            "expr": "rate(nova_torch_agents_spawned_total{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m])",
+            "legendFormat": "Spawned - {{agent_type}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(nova_torch_agents_terminated_total{namespace=\"$namespace\",agent_type=~\"$agent_type\"}[5m])",
+            "legendFormat": "Terminated - {{agent_type}}",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "fillOpacity": 0.2
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps"
+          }
+        }
+      }
+    ]
+  }
+}

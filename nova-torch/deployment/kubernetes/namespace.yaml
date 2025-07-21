@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nova-torch
+  labels:
+    name: nova-torch
+    environment: production
+    managed-by: torch
+    version: "0.2.0"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: nova-torch-quota
+  namespace: nova-torch
+spec:
+  hard:
+    requests.cpu: "100"
+    requests.memory: "200Gi"
+    limits.cpu: "200"
+    limits.memory: "400Gi"
+    persistentvolumeclaims: "20"
+    services: "10"
+    pods: "100"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: nova-torch-limits
+  namespace: nova-torch
+spec:
+  limits:
+  - default:
+      cpu: "2"
+      memory: "4Gi"
+    defaultRequest:
+      cpu: "0.5"
+      memory: "1Gi"
+    type: Container
+  - max:
+      cpu: "8"
+      memory: "16Gi"
+    min:
+      cpu: "0.1"
+      memory: "128Mi"
+    type: Container

@@ -1,0 +1,432 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "nova-torch-health",
+    "title": "Nova-Torch System Health",
+    "description": "Health monitoring and alerting dashboard",
+    "tags": ["nova-torch", "health", "alerts"],
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "10s",
+    "time": {
+      "from": "now-15m",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "namespace",
+          "type": "query",
+          "query": "label_values(nova_torch_system_health_status, namespace)",
+          "refresh": 1,
+          "includeAll": false,
+          "multi": false,
+          "current": {
+            "value": "nova-torch",
+            "text": "nova-torch"
+          }
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Overall System Status",
+        "type": "stat",
+        "gridPos": {"h": 12, "w": 8, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "min(nova_torch_system_health_status{namespace=\"$namespace\"})",
+            "legendFormat": "System Health",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "CRITICAL", "color": "red"},
+                  "1": {"text": "WARNING", "color": "orange"},
+                  "2": {"text": "HEALTHY", "color": "green"},
+                  "3": {"text": "UNKNOWN", "color": "gray"}
+                },
+                "type": "value"
+              }
+            ],
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "orange", "value": 1},
+                {"color": "green", "value": 2},
+                {"color": "gray", "value": 3}
+              ]
+            },
+            "custom": {
+              "displayMode": "lcd",
+              "orientation": "horizontal"
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Component Health Status",
+        "type": "table",
+        "gridPos": {"h": 12, "w": 16, "x": 8, "y": 0},
+        "targets": [
+          {
+            "expr": "nova_torch_health_check_status{namespace=\"$namespace\"}",
+            "legendFormat": "",
+            "refId": "A",
+            "instant": true,
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "auto"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Value"},
+              "properties": [
+                {"id": "custom.displayMode", "value": "color-background"},
+                {"id": "color", "value": {"mode": "thresholds"}},
+                {"id": "thresholds", "value": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "orange", "value": 1},
+                    {"color": "green", "value": 2}
+                  ]
+                }},
+                {"id": "mappings", "value": [
+                  {
+                    "options": {
+                      "0": {"text": "CRITICAL"},
+                      "1": {"text": "WARNING"},
+                      "2": {"text": "HEALTHY"}
+                    },
+                    "type": "value"
+                  }
+                ]}
+              ]
+            }
+          ]
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "__name__": true,
+                "job": true,
+                "namespace": true
+              },
+              "renameByName": {
+                "check_name": "Component",
+                "instance": "Instance",
+                "Value": "Status"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Health Check Response Times",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "nova_torch_health_check_duration_seconds{namespace=\"$namespace\"}",
+            "legendFormat": "{{check_name}} - {{instance}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear"
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Failed Health Checks",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(nova_torch_health_check_failures_total{namespace=\"$namespace\"}[5m])",
+            "legendFormat": "{{check_name}} - {{instance}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "fillOpacity": 0.2
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "DragonflyDB Connection Status",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 21},
+        "targets": [
+          {
+            "expr": "nova_torch_dragonfly_connection_status{namespace=\"$namespace\"}",
+            "legendFormat": "{{instance}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "DISCONNECTED", "color": "red"},
+                  "1": {"text": "CONNECTED", "color": "green"}
+                },
+                "type": "value"
+              }
+            ],
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "DragonflyDB Response Time",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 21},
+        "targets": [
+          {
+            "expr": "nova_torch_dragonfly_response_time_seconds{namespace=\"$namespace\"}",
+            "legendFormat": "{{instance}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "orange", "value": 0.1},
+                {"color": "red", "value": 0.5}
+              ]
+            },
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "System Resource Alerts",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 21},
+        "targets": [
+          {
+            "expr": "ALERTS{namespace=\"$namespace\",alertname=~\".*ResourceUsage.*\"}",
+            "legendFormat": "{{alertname}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "OK", "color": "green"},
+                  "1": {"text": "ALERT", "color": "red"}
+                },
+                "type": "value"
+              }
+            ],
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "red", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Agent Health Distribution",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 21},
+        "targets": [
+          {
+            "expr": "sum(nova_torch_agents_healthy{namespace=\"$namespace\"})",
+            "legendFormat": "Healthy",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(nova_torch_agents_unhealthy{namespace=\"$namespace\"})",
+            "legendFormat": "Unhealthy",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Error Rate Trend",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 27},
+        "targets": [
+          {
+            "expr": "rate(nova_torch_errors_total{namespace=\"$namespace\"}[5m])",
+            "legendFormat": "{{error_type}} - {{instance}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "fillOpacity": 0.1
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "System Uptime",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 27},
+        "targets": [
+          {
+            "expr": "nova_torch_uptime_seconds{namespace=\"$namespace\"} / 3600",
+            "legendFormat": "Uptime Hours - {{instance}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear"
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "h"
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Memory Usage by Component",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 36},
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{namespace=\"$namespace\",pod=~\"nova-torch.*\"} / 1024 / 1024",
+            "legendFormat": "{{pod}} - {{container}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear"
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "MB"
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "CPU Usage by Component",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 36},
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",pod=~\"nova-torch.*\"}[5m]) * 100",
+            "legendFormat": "{{pod}} - {{container}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear"
+            },
+            "color": {"mode": "palette-classic"},
+            "unit": "percent"
+          }
+        }
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": "-- Grafana --",
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        },
+        {
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "ALERTS{namespace=\"$namespace\"}",
+          "iconColor": "red",
+          "name": "System Alerts",
+          "step": "10s",
+          "tagKeys": "alertname",
+          "textFormat": "{{alertname}}: {{summary}}",
+          "titleFormat": "Alert"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,51 @@
+2025-07-16T11:45:10.901Z [INFO] Initializing DragonflyDB MCP Server
+2025-07-16T11:45:10.901Z [INFO] Initializing DragonflyDB client
+2025-07-16T11:45:10.903Z [INFO] Setting up request handlers
+2025-07-16T11:45:10.903Z [INFO] Request handlers set up successfully
+2025-07-16T11:45:10.903Z [INFO] Starting DragonflyDB MCP Server
+2025-07-16T11:45:10.903Z [INFO] DragonflyDB MCP Server started successfully
+2025-07-16T11:45:10.907Z [INFO] DragonflyDB client connected
+2025-07-16T11:45:10.907Z [INFO] DragonflyDB vector client connected
+2025-07-16T11:45:10.956Z [DEBUG] Handling ListToolsRequest
+2025-07-16T11:45:10.957Z [DEBUG] Handling ListResourcesRequest
+2025-07-16T11:45:20.014Z [INFO] Received SIGTERM signal
+2025-07-16T11:45:20.014Z [INFO] Cleaning up resources...
+2025-07-16T11:45:20.014Z [INFO] Cleaning up DragonflyDB client resources
+2025-07-16T11:45:20.014Z [DEBUG] Disconnecting main client
+2025-07-16T11:45:20.014Z [DEBUG] Disconnecting vector client
+2025-07-16T11:45:20.016Z [INFO] DragonflyDB client connection closed
+2025-07-16T11:45:55.563Z [INFO] Initializing DragonflyDB MCP Server
+2025-07-16T11:45:55.564Z [INFO] Initializing DragonflyDB client
+2025-07-16T11:45:55.565Z [INFO] Setting up request handlers
+2025-07-16T11:45:55.565Z [INFO] Request handlers set up successfully
+2025-07-16T11:45:55.566Z [INFO] Starting DragonflyDB MCP Server
+2025-07-16T11:45:55.566Z [INFO] DragonflyDB MCP Server started successfully
+2025-07-16T11:45:55.578Z [INFO] DragonflyDB client connected
+2025-07-16T11:45:55.578Z [INFO] DragonflyDB vector client connected
+2025-07-16T11:45:55.596Z [DEBUG] Handling ListToolsRequest
+2025-07-16T11:45:55.596Z [DEBUG] Handling ListResourcesRequest
+2025-07-16T11:46:05.233Z [INFO] Received SIGTERM signal
+2025-07-16T11:46:05.233Z [INFO] Cleaning up resources...
+2025-07-16T11:46:05.233Z [INFO] Cleaning up DragonflyDB client resources
+2025-07-16T11:46:05.233Z [DEBUG] Disconnecting main client
+2025-07-16T11:46:05.234Z [DEBUG] Disconnecting vector client
+2025-07-16T11:46:29.160Z [INFO] Initializing DragonflyDB MCP Server
+2025-07-16T11:46:29.161Z [INFO] Initializing DragonflyDB client
+2025-07-16T11:46:29.162Z [INFO] Setting up request handlers
+2025-07-16T11:46:29.163Z [INFO] Request handlers set up successfully
+2025-07-16T11:46:29.163Z [INFO] Starting DragonflyDB MCP Server
+2025-07-16T11:46:29.163Z [INFO] DragonflyDB MCP Server started successfully
+2025-07-16T11:46:29.170Z [INFO] DragonflyDB client connected
+2025-07-16T11:46:29.171Z [INFO] DragonflyDB vector client connected
+2025-07-16T11:46:29.384Z [DEBUG] Handling ListToolsRequest
+2025-07-16T11:46:29.384Z [DEBUG] Handling ListResourcesRequest
+2025-07-20T23:52:35.359Z [INFO] Initializing DragonflyDB MCP Server
+2025-07-20T23:52:35.360Z [INFO] Initializing DragonflyDB client
+2025-07-20T23:52:35.361Z [INFO] Setting up request handlers
+2025-07-20T23:52:35.362Z [INFO] Request handlers set up successfully
+2025-07-20T23:52:35.362Z [INFO] Starting DragonflyDB MCP Server
+2025-07-20T23:52:35.362Z [INFO] DragonflyDB MCP Server started successfully
+2025-07-20T23:52:35.369Z [INFO] DragonflyDB client connected
+2025-07-20T23:52:35.370Z [INFO] DragonflyDB vector client connected
+2025-07-20T23:52:35.427Z [DEBUG] Handling ListToolsRequest
+2025-07-20T23:52:35.427Z [DEBUG] Handling ListResourcesRequest

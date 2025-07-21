@@ -1,0 +1,29 @@
+# Nova-Torch Core Requirements
+# Author: Torch
+# Department: DevOps
+# Project: Nova-Torch
+# Date: 2025-01-20
+
+# Core dependencies
+redis==5.0.1
+pyyaml==6.0.1
+python-dotenv==1.0.0
+click==8.1.7
+
+# Async support
+asyncio==3.4.3
+aioredis==2.0.1
+
+# Logging and monitoring
+structlog==24.1.0
+prometheus-client==0.19.0
+opentelemetry-api==1.22.0
+opentelemetry-sdk==1.22.0
+opentelemetry-instrumentation-redis==0.43b0
+
+# Utilities
+tenacity==8.2.3
+python-dateutil==2.8.2
+
+# Type hints
+typing-extensions==4.9.0

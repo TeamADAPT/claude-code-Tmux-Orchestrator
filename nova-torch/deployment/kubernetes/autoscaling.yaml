@@ -1,0 +1,368 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nova-torch-orchestrator-hpa
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: orchestrator
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nova-torch-orchestrator
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  # CPU utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  # Memory utilization
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  # Custom metric: Active agents per orchestrator
+  - type: Pods
+    pods:
+      metric:
+        name: nova_torch_agents_active_per_orchestrator
+      target:
+        type: AverageValue
+        averageValue: "10"
+  # Custom metric: Message queue depth
+  - type: Pods
+    pods:
+      metric:
+        name: nova_torch_orchestrator_queue_size
+      target:
+        type: AverageValue
+        averageValue: "1000"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 120
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+      
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nova-torch-agent-hpa
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: agent
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nova-torch-agent
+  minReplicas: 5
+  maxReplicas: 50
+  metrics:
+  # CPU utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+  # Memory utilization
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 85
+  # Custom metric: Task queue depth
+  - type: External
+    external:
+      metric:
+        name: nova_torch_tasks_queued
+        selector:
+          matchLabels:
+            deployment: nova-torch-agent
+      target:
+        type: Value
+        value: "100"  # Scale up if more than 100 tasks queued
+  # Custom metric: Task processing rate
+  - type: Pods
+    pods:
+      metric:
+        name: nova_torch_tasks_processing_rate
+      target:
+        type: AverageValue
+        averageValue: "10"  # Target 10 tasks per second per pod
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 20
+        periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+      - type: Pods
+        value: 5
+        periodSeconds: 60
+      selectPolicy: Max
+      
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nova-torch-developer-agent-hpa
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: agent
+    agent-type: developer
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nova-torch-developer-agent
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  # CPU utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  # Custom metric: Developer tasks in queue
+  - type: External
+    external:
+      metric:
+        name: nova_torch_tasks_queued_by_type
+        selector:
+          matchLabels:
+            task_type: development
+      target:
+        type: Value
+        value: "50"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600  # Slower scale down for developers
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+        
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nova-torch-pm-agent-hpa
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: agent
+    agent-type: project-manager
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nova-torch-pm-agent
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  # CPU utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  # Custom metric: Active projects
+  - type: External
+    external:
+      metric:
+        name: nova_torch_active_projects
+      target:
+        type: Value
+        value: "5"  # 1 PM per 5 active projects
+  # Custom metric: Collaboration requests
+  - type: External
+    external:
+      metric:
+        name: nova_torch_collaboration_requests_pending
+      target:
+        type: Value
+        value: "10"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 900  # Very slow scale down for PMs
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 600
+    scaleUp:
+      stabilizationWindowSeconds: 120
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 180
+        
+---
+# Vertical Pod Autoscaler for Orchestrator
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: nova-torch-orchestrator-vpa
+  namespace: nova-torch
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nova-torch-orchestrator
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: orchestrator
+      minAllowed:
+        cpu: "1"
+        memory: "2Gi"
+      maxAllowed:
+        cpu: "8"
+        memory: "16Gi"
+      controlledResources: ["cpu", "memory"]
+      
+---
+# Vertical Pod Autoscaler for Agents
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: nova-torch-agent-vpa
+  namespace: nova-torch
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nova-torch-agent
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: agent
+      minAllowed:
+        cpu: "0.5"
+        memory: "1Gi"
+      maxAllowed:
+        cpu: "4"
+        memory: "8Gi"
+      controlledResources: ["cpu", "memory"]
+      
+---
+# Custom metrics for Prometheus Adapter
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adapter-config
+  namespace: nova-torch
+data:
+  config.yaml: |
+    rules:
+    # Expose Nova-Torch custom metrics
+    - seriesQuery: 'nova_torch_tasks_queued{namespace="nova-torch"}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+      name:
+        matches: "^nova_torch_(.*)$"
+        as: "${1}"
+      metricsQuery: 'avg_over_time(<<.Series>>{<<.LabelMatchers>>}[2m])'
+    
+    - seriesQuery: 'nova_torch_agents_active_per_orchestrator{namespace="nova-torch"}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^nova_torch_(.*)$"
+        as: "${1}"
+      metricsQuery: 'avg by (pod) (<<.Series>>{<<.LabelMatchers>>})'
+    
+    - seriesQuery: 'nova_torch_orchestrator_queue_size{namespace="nova-torch"}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^nova_torch_(.*)$"
+        as: "${1}"
+      metricsQuery: 'avg by (pod) (<<.Series>>{<<.LabelMatchers>>})'
+    
+    - seriesQuery: 'nova_torch_tasks_processing_rate{namespace="nova-torch"}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^nova_torch_(.*)$"
+        as: "${1}"
+      metricsQuery: 'rate(nova_torch_tasks_completed_total{<<.LabelMatchers>>}[2m])'
+    
+    - seriesQuery: 'nova_torch_tasks_queued_by_type{namespace="nova-torch"}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+      name:
+        matches: "^nova_torch_(.*)$"
+        as: "${1}"
+      metricsQuery: 'sum by (task_type) (<<.Series>>{<<.LabelMatchers>>})'
+    
+    - seriesQuery: 'nova_torch_active_projects{namespace="nova-torch"}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+      name:
+        matches: "^nova_torch_(.*)$"
+        as: "${1}"
+      metricsQuery: 'count(count by (project_id) (nova_torch_project_activity{<<.LabelMatchers>>}))'
+    
+    - seriesQuery: 'nova_torch_collaboration_requests_pending{namespace="nova-torch"}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+      name:
+        matches: "^nova_torch_(.*)$"
+        as: "${1}"
+      metricsQuery: 'sum(nova_torch_collaboration_requests{status="pending",<<.LabelMatchers>>})'

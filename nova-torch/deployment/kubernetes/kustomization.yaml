@@ -1,0 +1,92 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: nova-torch
+
+resources:
+  # Core infrastructure
+  - namespace.yaml
+  - rbac.yaml
+  - configmap.yaml
+  - secrets.yaml
+  
+  # Database
+  - dragonfly-deployment.yaml
+  
+  # Application deployments
+  - orchestrator-deployment.yaml
+  - agent-deployment.yaml
+  
+  # Monitoring
+  - monitoring-deployment.yaml
+  
+  # Autoscaling
+  - autoscaling.yaml
+  
+  # Ingress
+  - ingress.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: nova-torch
+  app.kubernetes.io/instance: production
+  app.kubernetes.io/version: "0.2.0"
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: nova-ecosystem
+
+# Configure image tags
+images:
+  - name: nova-torch/orchestrator
+    newTag: "0.2.0"
+  - name: nova-torch/agent
+    newTag: "0.2.0"
+  - name: docker.dragonflydb.io/dragonflydb/dragonfly
+    newTag: "latest"
+  - name: prom/prometheus
+    newTag: "v2.45.0"
+  - name: grafana/grafana
+    newTag: "10.0.0"
+
+# Patches for environment-specific configurations
+patchesStrategicMerge:
+  # Example: Increase replicas for production
+  # - |-
+  #   apiVersion: apps/v1
+  #   kind: Deployment
+  #   metadata:
+  #     name: nova-torch-orchestrator
+  #     namespace: nova-torch
+  #   spec:
+  #     replicas: 5
+
+# ConfigMap generator for dynamic configs
+configMapGenerator:
+  - name: nova-torch-version
+    literals:
+      - version=0.2.0
+      - build_date=2025-01-21
+      - git_commit=main
+
+# Secret generator (for development only)
+# In production, use external secret management
+secretGenerator:
+  - name: nova-torch-dev-secrets
+    literals:
+      - dragonfly-password=CHANGE_ME_IN_PRODUCTION
+    options:
+      disableNameSuffixHash: true
+
+# Replace specific values across all resources
+replacements:
+  - source:
+      kind: ConfigMap
+      name: nova-torch-config
+      fieldPath: data.dragonfly.host
+    targets:
+      - select:
+          kind: Deployment
+        fieldPaths:
+          - spec.template.spec.initContainers.[name=wait-for-dragonfly].command.[2]
+        options:
+          delimiter: " "
+          index: 2

@@ -1,0 +1,49 @@
+# Nova-Torch Test Requirements
+# Author: Torch
+# Department: DevOps
+# Project: Nova-Torch
+# Date: 2025-01-20
+
+# Testing framework
+pytest==8.0.2
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+pytest-timeout==2.2.0
+pytest-mock==3.12.0
+
+# Code coverage
+coverage[toml]==7.4.0
+codecov==2.1.13
+
+# Mocking
+responses==0.24.1
+faker==22.4.0
+
+# Load testing
+locust==2.20.1
+
+# Integration testing
+testcontainers==3.7.1
+docker==7.0.0
+
+# Code quality
+black==24.1.1
+flake8==7.0.0
+pylint==3.0.3
+mypy==1.8.0
+isort==5.13.2
+
+# Security testing
+bandit==1.7.6
+safety==3.0.1
+
+# Performance profiling
+py-spy==0.3.14
+memory-profiler==0.61.0
+
+# Documentation
+pydoc-markdown==4.8.2
+
+# Type stubs
+types-redis==4.6.0.20240106
+types-PyYAML==6.0.12.12

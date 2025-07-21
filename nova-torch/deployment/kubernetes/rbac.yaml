@@ -1,0 +1,306 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nova-torch-orchestrator
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: orchestrator
+    
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nova-torch-agent
+  namespace: nova-torch
+  labels:
+    app: nova-torch
+    component: agent
+    
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: nova-torch
+  labels:
+    app: prometheus
+    component: monitoring
+    
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nova-torch-orchestrator
+  namespace: nova-torch
+rules:
+# Pod management for agent spawning
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Pod logs for debugging
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"]
+# ConfigMaps for dynamic configuration
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+# Services for agent discovery
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
+# Endpoints for service discovery
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get", "list", "watch"]
+# Events for audit logging
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+# Deployments for scaling agents
+- apiGroups: ["apps"]
+  resources: ["deployments", "deployments/scale"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+# StatefulSets for ordered agent deployments
+- apiGroups: ["apps"]
+  resources: ["statefulsets", "statefulsets/scale"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+# HPA for autoscaling
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+  
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nova-torch-orchestrator
+  namespace: nova-torch
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nova-torch-orchestrator
+subjects:
+- kind: ServiceAccount
+  name: nova-torch-orchestrator
+  namespace: nova-torch
+  
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nova-torch-agent
+  namespace: nova-torch
+rules:
+# ConfigMaps for reading configuration
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+# Pods for self-awareness and peer discovery
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+# Services for service discovery
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
+# Events for audit logging
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+  
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nova-torch-agent
+  namespace: nova-torch
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nova-torch-agent
+subjects:
+- kind: ServiceAccount
+  name: nova-torch-agent
+  namespace: nova-torch
+  
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+    component: monitoring
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - nodes/proxy
+  - services
+  - endpoints
+  - pods
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["extensions"]
+  resources:
+  - ingresses
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+  
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+  namespace: nova-torch
+  
+---
+# Network policy for security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nova-torch-network-policy
+  namespace: nova-torch
+spec:
+  podSelector:
+    matchLabels:
+      app: nova-torch
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow internal communication between Nova-Torch components
+  - from:
+    - podSelector:
+        matchLabels:
+          app: nova-torch
+    ports:
+    - protocol: TCP
+      port: 50051  # gRPC
+    - protocol: TCP
+      port: 8000   # Metrics
+    - protocol: TCP
+      port: 8001   # Health
+  # Allow Prometheus scraping
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 8000   # Metrics
+  # Allow external access to orchestrator API
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: nova-torch
+    ports:
+    - protocol: TCP
+      port: 50051  # gRPC API
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+    - podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow communication to DragonflyDB
+  - to:
+    - podSelector:
+        matchLabels:
+          app: dragonfly
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow internal Nova-Torch communication
+  - to:
+    - podSelector:
+        matchLabels:
+          app: nova-torch
+    ports:
+    - protocol: TCP
+      port: 50051
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 8001
+  # Allow external HTTPS for potential API calls
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+      
+---
+# DragonflyDB Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dragonfly-network-policy
+  namespace: nova-torch
+spec:
+  podSelector:
+    matchLabels:
+      app: dragonfly
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow Nova-Torch components to connect
+  - from:
+    - podSelector:
+        matchLabels:
+          app: nova-torch
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow Prometheus metrics scraping
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 9999
+  # Allow internal cluster communication
+  - from:
+    - podSelector:
+        matchLabels:
+          app: dragonfly
+    ports:
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 16379  # Cluster bus port
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+    - podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow internal cluster communication
+  - to:
+    - podSelector:
+        matchLabels:
+          app: dragonfly
+    ports:
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 16379
