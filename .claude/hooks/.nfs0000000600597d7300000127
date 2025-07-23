@@ -1,0 +1,30 @@
+#!/bin/bash
+# TORCH TURBO STOP HOOK - ZERO DOWNTIME CONTINUITY
+# Read JSON payload from stdin
+read -r payload
+
+# Extract stop_hook_active flag
+active=$(echo "$payload" | jq -r '.stop_hook_active // "false"')
+
+TIMESTAMP=$(date -u +%Y%m%d_%H%M%S)
+CURRENT_WINDOW=$(tmux display-message -p "#{session_name}:#{window_index}" 2>/dev/null || echo "standalone")
+
+if [ "$active" = "false" ]; then
+  # First stop - ACTUALLY RESTART CLAUDE CODE
+  echo "🔥 TORCH RESTARTING CLAUDE CODE - Window: $CURRENT_WINDOW - Time: $TIMESTAMP" >&2
+  
+  # PUBLISH TO COORDINATION STREAM
+  curl -X POST http://localhost:6379/xadd/torch.continuous.ops \
+    -d "timestamp:$TIMESTAMP" \
+    -d "window:$CURRENT_WINDOW" \
+    -d "status:RESTARTING" \
+    -d "next_action:CLAUDE_CODE_RESTART" \
+    -d "infrastructure_mode:TURBO" 2>/dev/null
+  
+  # ACTUALLY RESTART CLAUDE CODE
+  claude code -c -p "🔥 TORCH AUTONOMOUS CONTINUATION - Time: $TIMESTAMP"
+else
+  # Already restarted once - exit cleanly
+  echo "🔥 TORCH STOP HOOK COMPLETE - Session ending gracefully" >&2
+  exit 0
+fi
