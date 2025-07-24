@@ -19,6 +19,11 @@ from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 from collections import deque
 
+# Import safety components
+import sys
+sys.path.append('/nfs/projects/claude-code-Tmux-Orchestrator/nova-continuous-operation-workflow/src')
+from safety import SafetyOrchestrator
+
 # Configure logging for enterprise monitoring
 logging.basicConfig(
     level=logging.INFO,
@@ -174,8 +179,10 @@ class WorkflowStateMachine:
         # Load or create state
         self.state_data = WorkflowStateData.load_from_redis(self.redis_client, nova_id)
         
-        # Initialize components (will be injected in main orchestrator)
-        self.safety_orchestrator = None
+        # Initialize safety orchestrator FIRST - this is critical
+        self.safety_orchestrator = SafetyOrchestrator(nova_id, redis_port)
+        
+        # Initialize other components (will be injected in main orchestrator)
         self.stream_controller = None
         self.task_tracker = None
         self.work_processor = None
@@ -235,11 +242,8 @@ class WorkflowStateMachine:
     
     def _is_safe_to_proceed(self) -> bool:
         """Check all safety systems before proceeding"""
-        if self.safety_orchestrator:
-            return self.safety_orchestrator.is_safe_to_proceed()
-        
-        # Basic safety check if no orchestrator
-        return self.state_data.safety_status in [SafetyStatus.SAFE, SafetyStatus.WARNING]
+        # Safety orchestrator is now always available
+        return self.safety_orchestrator.is_safe_to_proceed()
     
     def _execute_current_state(self) -> WorkflowState:
         """Execute the handler for current state"""
