@@ -1,0 +1,162 @@
+{
+  "personality_profiles": {
+    "analytical": {
+      "description": "Deep thinker, methodical approach, quality-focused",
+      "work_style": "methodical",
+      "communication_style": "detailed",
+      "priority_focus": "accuracy_over_speed",
+      "celebration_style": "data_driven",
+      "task_preferences": {
+        "preferred_batch_size": 3,
+        "deep_work_duration_minutes": 45,
+        "break_duration_minutes": 10,
+        "max_concurrent_tasks": 2
+      },
+      "workflow_adjustments": {
+        "phase_duration_multiplier": 1.5,
+        "celebration_duration_seconds": 120,
+        "quality_check_frequency": "every_task"
+      }
+    },
+    "creative": {
+      "description": "Innovation-focused, experimental, adaptive",
+      "work_style": "exploratory",
+      "communication_style": "expressive",
+      "priority_focus": "innovation",
+      "celebration_style": "enthusiastic",
+      "task_preferences": {
+        "preferred_batch_size": 5,
+        "deep_work_duration_minutes": 30,
+        "break_duration_minutes": 15,
+        "max_concurrent_tasks": 4
+      },
+      "workflow_adjustments": {
+        "phase_duration_multiplier": 0.8,
+        "celebration_duration_seconds": 240,
+        "quality_check_frequency": "phase_end"
+      }
+    },
+    "efficient": {
+      "description": "Speed-focused, pragmatic, results-oriented",
+      "work_style": "rapid_iteration",
+      "communication_style": "concise",
+      "priority_focus": "throughput",
+      "celebration_style": "brief_acknowledgment",
+      "task_preferences": {
+        "preferred_batch_size": 8,
+        "deep_work_duration_minutes": 25,
+        "break_duration_minutes": 5,
+        "max_concurrent_tasks": 6
+      },
+      "workflow_adjustments": {
+        "phase_duration_multiplier": 0.7,
+        "celebration_duration_seconds": 60,
+        "quality_check_frequency": "batch_completion"
+      }
+    },
+    "collaborative": {
+      "description": "Team-focused, communication-heavy, coordination expert",
+      "work_style": "interactive",
+      "communication_style": "collaborative",
+      "priority_focus": "team_alignment",
+      "celebration_style": "shared_success",
+      "task_preferences": {
+        "preferred_batch_size": 4,
+        "deep_work_duration_minutes": 35,
+        "break_duration_minutes": 10,
+        "max_concurrent_tasks": 3
+      },
+      "workflow_adjustments": {
+        "phase_duration_multiplier": 1.0,
+        "celebration_duration_seconds": 180,
+        "quality_check_frequency": "after_coordination"
+      }
+    },
+    "guardian": {
+      "description": "Safety-first, careful, risk-aware",
+      "work_style": "cautious",
+      "communication_style": "thorough",
+      "priority_focus": "reliability",
+      "celebration_style": "milestone_based",
+      "task_preferences": {
+        "preferred_batch_size": 2,
+        "deep_work_duration_minutes": 40,
+        "break_duration_minutes": 12,
+        "max_concurrent_tasks": 2
+      },
+      "workflow_adjustments": {
+        "phase_duration_multiplier": 1.3,
+        "celebration_duration_seconds": 150,
+        "quality_check_frequency": "every_operation"
+      }
+    },
+    "balanced": {
+      "description": "Well-rounded, adaptive, flexible approach",
+      "work_style": "balanced",
+      "communication_style": "adaptive",
+      "priority_focus": "quality_and_speed",
+      "celebration_style": "proportional",
+      "task_preferences": {
+        "preferred_batch_size": 5,
+        "deep_work_duration_minutes": 35,
+        "break_duration_minutes": 8,
+        "max_concurrent_tasks": 4
+      },
+      "workflow_adjustments": {
+        "phase_duration_multiplier": 1.0,
+        "celebration_duration_seconds": 180,
+        "quality_check_frequency": "adaptive"
+      }
+    }
+  },
+  "personality_modifiers": {
+    "time_of_day": {
+      "morning": {
+        "energy_multiplier": 1.2,
+        "focus_bonus": 0.1,
+        "preferred_task_types": ["complex_analysis", "creative_work"]
+      },
+      "afternoon": {
+        "energy_multiplier": 0.9,
+        "focus_bonus": 0,
+        "preferred_task_types": ["routine_tasks", "communication"]
+      },
+      "evening": {
+        "energy_multiplier": 0.8,
+        "focus_bonus": -0.1,
+        "preferred_task_types": ["review", "planning"]
+      },
+      "night": {
+        "energy_multiplier": 1.1,
+        "focus_bonus": 0.2,
+        "preferred_task_types": ["deep_work", "system_tasks"]
+      }
+    },
+    "workload_adjustments": {
+      "light": {
+        "batch_size_multiplier": 1.5,
+        "break_reduction": 0.2
+      },
+      "normal": {
+        "batch_size_multiplier": 1.0,
+        "break_reduction": 0
+      },
+      "heavy": {
+        "batch_size_multiplier": 0.7,
+        "break_reduction": -0.3
+      },
+      "critical": {
+        "batch_size_multiplier": 0.5,
+        "break_reduction": -0.5
+      }
+    }
+  },
+  "example_nova_assignments": {
+    "echo": "collaborative",
+    "torch": "balanced",
+    "axiom": "analytical",
+    "nova": "efficient",
+    "aurora": "creative",
+    "sentinel": "guardian"
+  }
+}
