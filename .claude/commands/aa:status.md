@@ -1,46 +1,86 @@
 ---
-allowed-tools: Bash, mcp__dragonflydb__stream_read, mcp__dragonflydb__get
-description: Check current NOVAWF status and state - works even if stopped
+allowed-tools: Bash, Read
+description: Check NOVAWF status without restarting - shows current state, tasks, and metrics
 ---
 
-# Check Workflow Status
+# NOVAWF Status Check
 
-I'll check the current workflow status and display the latest state information.
+## 📊 Checking Nova Workflow Status...
 
 !python3 -c "
 import redis
-import json
+import os
+import psutil
+import time
 from datetime import datetime
+
+nova_id = os.environ.get('NOVA_ID', 'unknown')
+print(f'🤖 Nova: {nova_id}')
+print('=' * 40)
 
 r = redis.Redis(host='localhost', port=18000, decode_responses=True)
 
-try:
-    state_data = r.hgetall('workflow:state:torch')
-    if state_data:
-        print(f'🟢 WORKFLOW STATUS - {datetime.now().strftime(\"%Y-%m-%d %H:%M:%S\")}')
-        print('='*50)
-        print(f'Current State: {state_data.get(\"current_state\", \"unknown\")}')
-        print(f'Current Phase: {state_data.get(\"current_phase\", \"unknown\")}')
-        print(f'Safety Status: {state_data.get(\"safety_status\", \"unknown\")}')
-        print(f'Tasks Completed: {state_data.get(\"tasks_completed_in_phase\", 0)}')
-        print(f'Total Cycles: {state_data.get(\"total_cycles_completed\", 0)}')
-        print(f'Tool Use Count: {state_data.get(\"tool_use_count\", 0)}')
-        print('='*50)
+# Check workflow state
+state_data = r.hgetall(f'workflow:state:{nova_id}')
+if not state_data:
+    print('❌ NOVAWF Not Running')
+    print('   Run /aa:auto to start')
+else:
+    # Get process info
+    process_info = os.popen(f'ps aux | grep -E \"main\\\\.py.*{nova_id}\" | grep -v grep').read().strip()
+    if process_info:
+        pid = int(process_info.split()[1])
+        print(f'✅ NOVAWF Active (PID: {pid})')
+        mode = state_data.get(\"current_state\", \"unknown\").replace(\"_\", \" \").title()
+        print(f'   🎯 Mode: {mode}')
         
-        metrics = json.loads(state_data.get('enterprise_metrics', '{}'))
-        if metrics:
-            print('\n📊 PERFORMANCE METRICS')
-            print('='*50)
-            print(f'Tasks/Hour: {metrics.get(\"tasks_per_hour\", 0):.2f}')
-            print(f'Cycles/Hour: {metrics.get(\"cycles_per_hour\", 0):.2f}')
-            print(f'Uptime Hours: {metrics.get(\"uptime_hours\", 0):.2f}')
-            print(f'Last Cycle Duration: {metrics.get(\"last_cycle_duration_seconds\", 0):.1f}s')
+        # Get process metrics
+        try:
+            process = psutil.Process(pid)
+            cpu_percent = process.cpu_percent(interval=0.1)
+            memory_mb = process.memory_info().rss / 1024 / 1024
+            print(f'   📊 CPU: {cpu_percent:.1f}% | 🖥️  Memory: {memory_mb:.1f}MB')
+        except:
+            pass
     else:
-        print('🔴 WORKFLOW STOPPED')
-        print('='*50)
-        print('No workflow state found - workflow is not running')
-        print('Use /aa:auto to start the workflow')
-except Exception as e:
-    print(f'❌ Error reading workflow state: {e}')
-    print('DragonflyDB may not be running on port 18000')
+        print('⚠️  State exists but process not found')
+    
+    # Show task info
+    print('')
+    print('📋 Task Queue:')
+    
+    # Count pending tasks
+    pending_tasks = r.xlen(f'nova.tasks.{nova_id}')
+    completed_today = r.get(f'workflow:stats:{nova_id}:completed_today') or 0
+    
+    print(f'   🔵 Pending: {pending_tasks}')
+    print(f'   ✅ Completed Today: {completed_today}')
+    
+    # Show recent tasks
+    recent_tasks = r.xrange(f'nova.tasks.{nova_id}', '-', '+', count=3)
+    if recent_tasks:
+        print('')
+        print('📌 Recent Tasks:')
+        for task_id, task_data in recent_tasks:
+            task_type = task_data.get('type', 'unknown')
+            priority = task_data.get('priority', 'normal')
+            priority_icon = '🔴' if priority == 'high' else '🟡' if priority == 'medium' else '🟢'
+            print(f'   {priority_icon} [{priority}] {task_type}')
+    
+    # Show last activity
+    last_heartbeat = state_data.get('last_heartbeat')
+    if last_heartbeat:
+        last_time = datetime.fromisoformat(last_heartbeat)
+        age = (datetime.now() - last_time).total_seconds()
+        if age < 60:
+            print(f'\\n💓 Last Heartbeat: {int(age)}s ago')
+        else:
+            print(f'\\n💓 Last Heartbeat: {int(age/60)}m ago')
+
+print('')
+print('💡 Commands:')
+print('   /aa:auto    - Start/restart workflow')
+print('   /aa:stop    - Stop workflow')
+print('   /aa:man     - Manual mode')
+print('   /aa:train   - Training mode')
 "

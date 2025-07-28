@@ -31,7 +31,7 @@ chmod +x "$WRAPPER"
 
 # Launch in gnome-terminal
 gnome-terminal \
-    --title="🔥 Nova $NOVA_ID - AUTO $MODE" \
+    --title="🔥 NOVA $NOVA_ID 🔥" \
     --geometry=120x40 \
     -- bash "$WRAPPER"
 
