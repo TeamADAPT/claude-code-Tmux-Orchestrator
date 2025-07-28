@@ -23,6 +23,7 @@ from collections import deque
 import sys
 sys.path.append('/nfs/projects/claude-code-Tmux-Orchestrator/nova-continuous-operation-workflow/src')
 from safety import SafetyOrchestrator
+from core.workflow_parameters import WORKFLOW_CONFIG, timing, safety, workflow, training
 
 # Configure logging for enterprise monitoring
 logging.basicConfig(
@@ -42,6 +43,8 @@ class WorkflowState(Enum):
     PHASE_TRANSITION = "phase_transition"
     ERROR_RECOVERY = "error_recovery"
     SAFETY_PAUSE = "safety_pause"
+    MANUAL_MODE = "manual_mode"
+    TRAINING_MODE = "training_mode"
 
 class WorkflowPhase(Enum):
     """Simplified 2-phase alternating system to prevent drift"""
@@ -198,7 +201,9 @@ class WorkflowStateMachine:
             WorkflowState.COMPLETION_ROUTINE: self._handle_completion_routine,
             WorkflowState.PHASE_TRANSITION: self._handle_phase_transition,
             WorkflowState.ERROR_RECOVERY: self._handle_error_recovery,
-            WorkflowState.SAFETY_PAUSE: self._handle_safety_pause
+            WorkflowState.SAFETY_PAUSE: self._handle_safety_pause,
+            WorkflowState.MANUAL_MODE: self._handle_manual_mode,
+            WorkflowState.TRAINING_MODE: self._handle_training_mode
         }
         
         logger.info(f"Workflow state machine initialized for {nova_id}")
@@ -209,6 +214,11 @@ class WorkflowStateMachine:
         
         try:
             logger.info(f"Executing cycle - Current state: {self.state_data.current_state.value}")
+            
+            # Check for control commands first
+            command_state = self._check_control_commands()
+            if command_state:
+                return command_state
             
             # Safety check first - ALWAYS
             if not self._is_safe_to_proceed():
@@ -492,6 +502,284 @@ class WorkflowStateMachine:
         logger.error(f"Entering error recovery: {error}")
         self.state_data.consecutive_error_count += 1
         return WorkflowState.ERROR_RECOVERY
+    
+    def _check_control_commands(self) -> Optional[WorkflowState]:
+        """Check for /man or /auto control commands in coordination stream"""
+        try:
+            # Check for control commands in Nova's coordination stream
+            stream_name = f"nova.coordination.{self.nova_id}"
+            
+            # Read recent messages looking for control commands
+            messages = self.redis_client.xrevrange(stream_name, count=5)
+            
+            for msg_id, fields in messages:
+                msg_type = fields.get(b'type', b'').decode('utf-8')
+                
+                # Check for manual mode command
+                if msg_type == 'CONTROL_MANUAL' or fields.get(b'command', b'').decode('utf-8') == '/man':
+                    logger.info("Manual mode command detected - entering manual mode")
+                    return WorkflowState.MANUAL_MODE
+                
+                # Check for autonomous mode command  
+                if msg_type == 'CONTROL_AUTO' or fields.get(b'command', b'').decode('utf-8') == '/auto':
+                    logger.info("Autonomous mode command detected - resuming workflow")
+                    if self.state_data.current_state in [WorkflowState.MANUAL_MODE, WorkflowState.TRAINING_MODE]:
+                        return WorkflowState.STREAM_CHECK
+                
+                # Check for training mode command (development only)
+                if msg_type == 'CONTROL_TRAIN' or fields.get(b'command', b'').decode('utf-8') == '/train':
+                    # Only allow training mode for torch during development
+                    if self.nova_id == 'torch':
+                        logger.info("Training mode command detected - entering adaptive development mode")
+                        return WorkflowState.TRAINING_MODE
+                    else:
+                        logger.warning(f"Training mode not authorized for {self.nova_id} - only torch during dev")
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error checking control commands: {e}")
+            return None
+    
+    def _handle_manual_mode(self) -> WorkflowState:
+        """Handle manual mode - workflow paused until /auto command"""
+        logger.info("In manual mode - workflow paused, awaiting /auto command")
+        
+        # Post manual mode status to enterprise monitoring
+        self.redis_client.xadd(
+            f"nova.enterprise.control.{self.nova_id}",
+            {
+                'type': 'MANUAL_MODE_ACTIVE',
+                'timestamp': datetime.now().isoformat(),
+                'status': 'WORKFLOW_PAUSED_BY_USER',
+                'waiting_for': 'AUTO_COMMAND'
+            }
+        )
+        
+        # Check for /auto command periodically using configured interval
+        time.sleep(timing.manual_mode_check_interval)
+        
+        # Check again for control commands
+        command_state = self._check_control_commands()
+        if command_state and command_state != WorkflowState.MANUAL_MODE:
+            logger.info("Exiting manual mode - resuming autonomous operation")
+            return command_state
+        
+        # Stay in manual mode
+        return WorkflowState.MANUAL_MODE
+    
+    def _handle_training_mode(self) -> WorkflowState:
+        """Handle training mode - adaptive parameter tuning with versioned experimentation"""
+        logger.info("In training mode - adaptive parameter tuning active")
+        
+        # Initialize training session if needed
+        if not hasattr(self, '_training_session'):
+            self._initialize_training_session()
+        
+        # Post training mode status to enterprise monitoring
+        self.redis_client.xadd(
+            f"nova.enterprise.training.{self.nova_id}",
+            {
+                'type': 'TRAINING_MODE_ACTIVE',
+                'timestamp': datetime.now().isoformat(),
+                'status': 'ADAPTIVE_TUNING_ENABLED',
+                'branch': getattr(self, '_training_branch', 'unknown'),
+                'modifications': getattr(self, '_training_modifications', 0)
+            }
+        )
+        
+        # Check for parameter modification requests
+        self._check_training_commands()
+        
+        # Monitor performance impact of changes
+        self._monitor_training_performance()
+        
+        # Check for /auto command to exit training
+        command_state = self._check_control_commands()
+        if command_state and command_state != WorkflowState.TRAINING_MODE:
+            logger.info("Exiting training mode - finalizing experiments")
+            self._finalize_training_session()
+            return command_state
+        
+        # Continue in training mode with adaptive execution
+        time.sleep(timing.training_mode_check_interval)
+        return WorkflowState.TRAINING_MODE
+    
+    def _initialize_training_session(self):
+        """Initialize a new training session with git branching and metrics baseline"""
+        import subprocess
+        from datetime import datetime
+        
+        try:
+            # Create training branch
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            self._training_branch = f"training-torch-{timestamp}"
+            self._training_start = datetime.now()
+            self._training_modifications = 0
+            self._baseline_metrics = self.state_data.enterprise_metrics.copy()
+            
+            # Git operations
+            subprocess.run(["git", "checkout", "-b", self._training_branch], 
+                         cwd="/nfs/projects/claude-code-Tmux-Orchestrator/nova-continuous-operation-workflow",
+                         capture_output=True)
+            
+            # Record training session start
+            self.redis_client.xadd(
+                f"nova.training.sessions.{self.nova_id}",
+                {
+                    'action': 'SESSION_START',
+                    'branch': self._training_branch,
+                    'timestamp': datetime.now().isoformat(),
+                    'baseline_metrics': json.dumps(self._baseline_metrics)
+                }
+            )
+            
+            logger.info(f"Training session initialized on branch: {self._training_branch}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize training session: {e}")
+    
+    def _check_training_commands(self):
+        """Check for parameter modification commands in training stream"""
+        try:
+            stream_name = f"nova.training.{self.nova_id}"
+            messages = self.redis_client.xread({stream_name: '$'}, block=100, count=10)
+            
+            for stream, stream_messages in messages:
+                for msg_id, fields in stream_messages:
+                    param_type = fields.get(b'param_type', b'').decode('utf-8')
+                    param_name = fields.get(b'param_name', b'').decode('utf-8')
+                    new_value = fields.get(b'new_value', b'').decode('utf-8')
+                    
+                    if param_type and param_name and new_value:
+                        self._apply_parameter_change(param_type, param_name, new_value)
+                        
+        except Exception as e:
+            logger.error(f"Error checking training commands: {e}")
+    
+    def _apply_parameter_change(self, param_type: str, param_name: str, new_value: str):
+        """Apply a parameter change with automatic commit and performance tracking"""
+        logger.info(f"Applying parameter change: {param_type}.{param_name} = {new_value}")
+        
+        # Convert value to appropriate type
+        try:
+            current_value = WORKFLOW_CONFIG.get_parameter(param_type, param_name)
+            if isinstance(current_value, int):
+                typed_value = int(new_value)
+            elif isinstance(current_value, float):
+                typed_value = float(new_value)
+            else:
+                typed_value = new_value
+                
+            # Apply the parameter change
+            success = WORKFLOW_CONFIG.set_parameter(param_type, param_name, typed_value)
+            
+            if success:
+                self._training_modifications += 1
+                
+                # Auto-commit the change
+                import subprocess
+                
+                # First, update the parameters file with new value
+                params_file = "/nfs/projects/claude-code-Tmux-Orchestrator/nova-continuous-operation-workflow/src/core/workflow_parameters.py"
+                
+                # Read current file
+                with open(params_file, 'r') as f:
+                    content = f.read()
+                
+                # Update the specific parameter value in the file
+                # This is a simple approach - in production would use AST
+                old_line = f"{param_name}: int = {current_value}"
+                new_line = f"{param_name}: int = {typed_value}"
+                
+                if old_line in content:
+                    content = content.replace(old_line, new_line)
+                else:
+                    # Try float format
+                    old_line = f"{param_name}: float = {current_value}"
+                    new_line = f"{param_name}: float = {typed_value}"
+                    if old_line in content:
+                        content = content.replace(old_line, new_line)
+                
+                # Write updated content
+                with open(params_file, 'w') as f:
+                    f.write(content)
+                
+                # Commit the change
+                subprocess.run([
+                    "git", "add", params_file
+                ], cwd="/nfs/projects/claude-code-Tmux-Orchestrator/nova-continuous-operation-workflow")
+                
+                subprocess.run([
+                    "git", "commit", "-m", 
+                    f"Training: Adjust {param_type}.{param_name} to {typed_value}"
+                ], cwd="/nfs/projects/claude-code-Tmux-Orchestrator/nova-continuous-operation-workflow")
+                
+                # Log performance impact tracking
+                self.redis_client.xadd(
+                    f"nova.training.changes.{self.nova_id}",
+                    {
+                        'param_type': param_type,
+                        'param_name': param_name,
+                        'old_value': str(current_value),
+                        'new_value': str(typed_value),
+                        'timestamp': datetime.now().isoformat(),
+                        'modification_number': self._training_modifications
+                    }
+                )
+                
+                logger.info(f"Successfully applied and committed parameter change")
+            else:
+                logger.error(f"Failed to apply parameter change - invalid parameter")
+                
+        except Exception as e:
+            logger.error(f"Error applying parameter change: {e}")
+    
+    def _monitor_training_performance(self):
+        """Monitor performance impact of training modifications"""
+        if hasattr(self, '_baseline_metrics'):
+            current_metrics = self.state_data.enterprise_metrics
+            
+            # Calculate performance deltas
+            tasks_per_hour_delta = (
+                current_metrics.get('tasks_per_hour', 0) - 
+                self._baseline_metrics.get('tasks_per_hour', 0)
+            )
+            
+            # Log performance impact
+            self.redis_client.xadd(
+                f"nova.training.performance.{self.nova_id}",
+                {
+                    'timestamp': datetime.now().isoformat(),
+                    'modifications': self._training_modifications,
+                    'tasks_per_hour_delta': tasks_per_hour_delta,
+                    'current_metrics': json.dumps(current_metrics)
+                }
+            )
+    
+    def _finalize_training_session(self):
+        """Finalize training session with performance summary and merge decision"""
+        try:
+            duration = (datetime.now() - self._training_start).total_seconds() / 60
+            
+            # Record session completion
+            self.redis_client.xadd(
+                f"nova.training.sessions.{self.nova_id}",
+                {
+                    'action': 'SESSION_COMPLETE',
+                    'branch': self._training_branch,
+                    'duration_minutes': duration,
+                    'modifications': self._training_modifications,
+                    'timestamp': datetime.now().isoformat()
+                }
+            )
+            
+            logger.info(f"Training session complete: {self._training_modifications} modifications in {duration:.1f} minutes")
+            
+            # TODO: Implement auto-merge logic based on performance improvements
+            
+        except Exception as e:
+            logger.error(f"Error finalizing training session: {e}")
     
     def _generate_momentum_task(self):
         """Generate a productive momentum task when no work available"""

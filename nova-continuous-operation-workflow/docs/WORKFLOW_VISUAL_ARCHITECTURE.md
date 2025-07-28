@@ -1,232 +1,199 @@
-# Nova Continuous Operation Workflow - Visual Architecture
+# NOVAWF Visual Architecture - As Designed
 
-## State Machine Flow
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    NOVA WORKFLOW STATE MACHINE                 │
-└─────────────────────────────────────────────────────────────────┘
-
-    ┌─────────────────┐
-    │  INITIALIZING   │ ──┐
-    └─────────────────┘   │
-             │            │
-             ▼            │
-    ┌─────────────────┐   │
-    │  STREAM_CHECK   │ ◄─┤
-    └─────────────────┘   │
-             │            │
-             ▼            │
-    ┌─────────────────┐   │
-    │ WORK_DISCOVERY  │   │
-    └─────────────────┘   │
-             │            │
-             ▼            │
-    ┌─────────────────┐   │
-    │ TASK_EXECUTION  │   │
-    └─────────────────┘   │
-             │            │
-             ▼            │
-    ┌─────────────────┐   │
-    │PROGRESS_UPDATE  │   │
-    └─────────────────┘   │
-             │            │
-             ▼            │
-    ┌─────────────────┐   │
-    │COMPLETION_ROUTINE│   │
-    └─────────────────┘   │
-             │            │
-             ▼            │
-    ┌─────────────────┐   │
-    │PHASE_TRANSITION │ ──┘
-    └─────────────────┘
-             │
-             ▼
-         [Phase 1 ↔ Phase 2]
-
-    ERROR HANDLING:
-    ┌─────────────────┐   ┌─────────────────┐
-    │ ERROR_RECOVERY  │   │  SAFETY_PAUSE   │
-    └─────────────────┘   └─────────────────┘
-             ▲                       ▲
-             └─── Any State Error ───┘
-```
-
-## Two-Phase Alternating System
+## Core Concept: Continuous Anti-Drift Operation
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     ANTI-DRIFT PHASE SYSTEM                    │
+│                    NOVA CONTINUOUS OPERATION                      │
+│                         (24/7 Autonomous)                         │
 └─────────────────────────────────────────────────────────────────┘
-
-    WORK PHASE 1                    WORK PHASE 2
-    ┌─────────────┐                ┌─────────────┐
-    │ Tasks: 6-8  │ ───────────►   │ Tasks: 6-8  │
-    │ Duration:   │ ◄─────────────  │ Duration:   │
-    │ ~2-3 hours  │                │ ~2-3 hours  │
-    └─────────────┘                └─────────────┘
-           │                              │
-           ▼                              ▼
-    ┌─────────────┐                ┌─────────────┐
-    │3-min Pause  │                │3-min Pause  │
-    │Celebration  │                │Celebration  │
-    └─────────────┘                └─────────────┘
-
-    Key Anti-Drift Features:
-    • Structured 3-minute celebration periods
-    • Automatic phase transitions prevent infinite celebration
-    • Momentum task generation maintains forward progress
-    • Safety pauses reset on violations
-```
-
-## Stream Coordination Architecture
-
-```
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   DRAGONFLY STREAM ECOSYSTEM                   │
-│                        (Port 18000)                            │
+│                      WORKFLOW STATE MACHINE                       │
+│  ┌─────────────┐     Continuous Loop      ┌─────────────┐       │
+│  │   START     │ ─────────────────────────▶│STREAM_CHECK │       │
+│  └─────────────┘                           └──────┬──────┘       │
+│                                                    │              │
+│                                                    ▼              │
+│  ┌─────────────┐                          ┌──────────────┐       │
+│  │PHASE_TRANS  │◀─────────────────────────│WORK_DISCOVERY│       │
+│  └──────┬──────┘                          └──────┬───────┘       │
+│         │                                         │               │
+│         ▼                                         ▼               │
+│  ┌─────────────┐                          ┌──────────────┐       │
+│  │COMPLETION   │◀─────────────────────────│TASK_EXECUTION│       │
+│  │  ROUTINE    │                          └──────┬───────┘       │
+│  └──────┬──────┘                                 │               │
+│         │                                         ▼               │
+│         │                                  ┌──────────────┐       │
+│         └─────────────────────────────────▶│PROGRESS_UPDATE│      │
+│                                            └──────┬───────┘       │
+│                                                   │               │
+│                                                   └───────────────┘
 └─────────────────────────────────────────────────────────────────┘
-
-    Nova Torch Instance
-    ┌─────────────────┐
-    │ Stream Controller│
-    └─────────────────┘
-             │
-             ▼
-    ┌─────────────────────────────────────────────────────────────┐
-    │                    STREAM CATEGORIES                        │
-    ├─────────────────────────────────────────────────────────────┤
-    │ COORDINATION:                                               │
-    │ • nova.coordination.torch                                   │
-    │ • nova.cross.coordination                                   │
-    │ • nova.wake.signals                                         │
-    ├─────────────────────────────────────────────────────────────┤
-    │ TASK TRACKING:                                              │
-    │ • nova.tasks.torch.todo                                     │
-    │ • nova.tasks.torch.progress                                 │
-    │ • nova.tasks.torch.completed                                │
-    ├─────────────────────────────────────────────────────────────┤
-    │ ENTERPRISE:                                                 │
-    │ • nova.enterprise.metrics                                   │
-    │ • nova.enterprise.state.torch                               │
-    │ • nova.enterprise.transitions.torch                         │
-    ├─────────────────────────────────────────────────────────────┤
-    │ SAFETY:                                                     │
-    │ • nova.safety.torch                                         │
-    │ • nova.priority.alerts                                      │
-    └─────────────────────────────────────────────────────────────┘
-
-    Message Flow:
-    Nova → Stream → Processing → Work Items → Execution
 ```
 
-## Safety System Integration
+## How It's MEANT to Work (Design Intent)
 
+### 1. **ALWAYS RUNNING** (Default State)
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     SAFETY ORCHESTRATOR                        │
-└─────────────────────────────────────────────────────────────────┘
+Nova Agent (Claude Code Session)
+    │
+    ├── Starts automatically on session begin
+    ├── Runs workflow engine in background
+    └── Continues until explicitly stopped
 
-    SAFETY CHECKS (Every Cycle)
-    ┌─────────────────┐
-    │ API Guardian    │ ──┐
-    └─────────────────┘   │
-    ┌─────────────────┐   │
-    │ Hook Monitor    │ ──┤
-    └─────────────────┘   │    ┌─────────────────┐
-    ┌─────────────────┐   ├──► │ Safety Decision │
-    │ Resource Monitor│ ──┤    └─────────────────┘
-    └─────────────────┘   │             │
-    ┌─────────────────┐   │             ▼
-    │ Stream Health   │ ──┘    ┌─────────────────┐
-    └─────────────────┘        │ SAFE / PAUSE    │
-                               └─────────────────┘
-
-    EMERGENCY PROTOCOLS:
-    • API Hammering → Circuit Breaker (5 min)
-    • Infinite Loop → Process Kill + Recovery
-    • Resource Exhaustion → Cleanup + Monitoring
-    • Hook Failure → Quarantine + Safe Mode
+Workflow Engine (main.py)
+    │
+    ├── Infinite loop through states
+    ├── Never stops unless commanded
+    └── Anti-drift mechanisms prevent stalling
 ```
 
-## Momentum Task Generation
-
+### 2. **Anti-Drift State Flow**
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                   WORK DISCOVERY ENGINE                        │
-└─────────────────────────────────────────────────────────────────┘
-
-    Priority Order:
-    1. CRITICAL Messages (Safety, Alerts)
-    2. HIGH Priority Coordination
-    3. MEDIUM Stream Work
-    4. LOW Background Tasks
-    5. MOMENTUM Tasks (Generated)
-
-    Momentum Templates:
-    ┌─────────────────────────────────────────────────────────────┐
-    │ • Review workflow performance metrics                       │
-    │ • Update documentation with insights                        │
-    │ • Analyze coordination patterns                             │
-    │ • Validate safety system status                             │
-    │ • Research Nova behavioral patterns                         │
-    └─────────────────────────────────────────────────────────────┘
-
-    Generated when: No high-priority work available
-    Purpose: Maintain forward momentum, prevent idle drift
-```
-
-## Enterprise Dashboard Data Flow
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    ENTERPRISE REPORTING                        │
-└─────────────────────────────────────────────────────────────────┘
-
-    Data Sources:
-    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-    │ State Tracking  │    │ Stream Activity │    │ Task Metrics    │
-    └─────────────────┘    └─────────────────┘    └─────────────────┘
-             │                       │                       │
-             ▼                       ▼                       ▼
-    ┌─────────────────────────────────────────────────────────────┐
-    │              METRICS COLLECTOR                              │
-    └─────────────────────────────────────────────────────────────┘
-                                   │
-                                   ▼
-    ┌─────────────────────────────────────────────────────────────┐
-    │               DASHBOARD GENERATOR                           │
-    │                                                             │
-    │ • Operational Status       • Safety Compliance             │
-    │ • Productivity Metrics     • Task Tracking Status          │
-    │ • Quality Indicators       • Collaboration Metrics         │
-    └─────────────────────────────────────────────────────────────┘
+STREAM_CHECK (60s)
+    ├── Check DragonflyDB for work
+    ├── Check for control commands (/man, /auto, /train)
+    └── Always moves forward
+         │
+         ▼
+WORK_DISCOVERY
+    ├── Find available tasks
+    ├── OR generate momentum tasks
+    └── NEVER gets stuck here
+         │
+         ▼
+TASK_EXECUTION
+    ├── Do the actual work
+    ├── Update progress
+    └── Track completion
+         │
+         ▼
+PROGRESS_UPDATE
+    ├── Post to streams
+    ├── Update metrics
+    └── Check phase completion
+         │
+         ▼
+COMPLETION_ROUTINE (Brief!)
+    ├── Acknowledge success
+    ├── 10 second celebration MAX
+    └── Immediately continue
+         │
+         ▼
+PHASE_TRANSITION
+    ├── Switch work phases
+    ├── Reset counters
+    └── Back to STREAM_CHECK
 ```
 
-## Cross-Nova Coordination Pattern
+### 3. **Control Modes - LIVE SWITCHING**
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                   MULTI-NOVA ECOSYSTEM                         │
-└─────────────────────────────────────────────────────────────────┘
-
-    Nova Torch          Nova Echo           Nova Helix
-    ┌─────────┐        ┌─────────┐        ┌─────────┐
-    │Workflow │        │Workflow │        │Workflow │
-    │ Engine  │        │ Engine  │        │ Engine  │
-    └─────────┘        └─────────┘        └─────────┘
-         │                   │                   │
-         └─────────────┬─────────────┬───────────┘
-                       │             │
-                       ▼             ▼
-              ┌─────────────────────────────┐
-              │   nova.cross.coordination   │
-              │         (Shared)            │
-              └─────────────────────────────┘
-
-    Coordination Messages:
-    • WORK_REQUEST (Nova → Nova)
-    • COLLABORATION_REQUEST (Cross-project)
-    • STATUS_UPDATE (Health sharing)
-    • RESOURCE_SHARING (Optimization)
+                    ┌─────────────┐
+                    │   /aa:man   │
+                    └──────┬──────┘
+                           │
+    ┌──────────────────────┼──────────────────────┐
+    ▼                      ▼                      ▼
+┌────────┐          ┌─────────────┐         ┌────────┐
+│AUTO    │◀────────▶│   MANUAL    │◀───────▶│TRAINING│
+│(Normal)│          │  (Paused)   │         │(Tuning)│
+└────────┘          └─────────────┘         └────────┘
+    ▲                      ▲                      ▲
+    └──────────────────────┼──────────────────────┘
+                           │
+                    ┌──────┴──────┐
+                    │  /aa:auto   │
+                    └─────────────┘
 ```
+
+### 4. **What Each Mode Does**
+
+#### **AUTO MODE** (Default)
+- Workflow runs continuously
+- States cycle automatically
+- Work gets done autonomously
+- This is the NORMAL state
+
+#### **MANUAL MODE** (/aa:man)
+- Workflow PAUSES in current state
+- Waits for /aa:auto command
+- No autonomous work happens
+- User has full control
+
+#### **TRAINING MODE** (/aa:train)
+- Workflow continues BUT
+- Parameters can be modified live
+- Changes tracked in git branches
+- Performance monitored
+
+### 5. **Current Implementation Gap**
+
+**DESIGNED BEHAVIOR:**
+```
+Claude Code Session Start
+         │
+         ▼
+Workflow Auto-Starts ──────▶ Continuous Operation
+         │
+         └──▶ User works alongside autonomous workflow
+```
+
+**CURRENT BEHAVIOR:**
+```
+Claude Code Session Start
+         │
+         ▼
+Nothing happens ──────▶ User must run /aa:auto
+         │
+         └──▶ Then workflow starts
+```
+
+## The Fix Needed
+
+### Option 1: Auto-Start on Session (Original Design)
+```python
+# In Claude Code initialization
+if not workflow_running():
+    start_workflow_background()
+```
+
+### Option 2: Keep Manual Start but Update Training Mode
+```markdown
+# /aa:train command should:
+1. Do NOT start workflow automatically
+2. Just send mode command
+3. Let user debug/modify without interference
+4. Workflow runs only when explicitly started with /aa:auto
+```
+
+## Visual Summary: Intended Workflow
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  NOVA AGENT LIFECYCLE                │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  Session Start ──▶ Workflow Running ──▶ Work Done  │
+│       │                    │                  │     │
+│       │                    │                  │     │
+│       ▼                    ▼                  ▼     │
+│   [AUTOMATIC]        [CONTINUOUS]        [ALWAYS]   │
+│                                                     │
+│  User Commands:                                    │
+│    /aa:man  ──▶ Pause for manual control          │
+│    /aa:train ──▶ Enter tuning mode                │
+│    /aa:auto  ──▶ Resume/ensure autonomous         │
+│    /aa:stop  ──▶ Completely halt (rare)           │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
+
+The core philosophy: **The workflow should be like breathing - it happens automatically unless you consciously decide to hold your breath.**
+
+---
+**Nova Continuous Operation Workflow (NOVAWF)**  
+Architecture Documentation v1.0
