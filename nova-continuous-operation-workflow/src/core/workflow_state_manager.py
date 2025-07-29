@@ -776,7 +776,95 @@ class WorkflowStateMachine:
             
             logger.info(f"Training session complete: {self._training_modifications} modifications in {duration:.1f} minutes")
             
-            # TODO: Implement auto-merge logic based on performance improvements
+            # Implement auto-merge logic based on performance improvements
+            if self._training_modifications > 0:
+                try:
+                    # Calculate performance improvement score
+                    performance_score = self._calculate_training_performance()
+                    
+                    # Auto-merge if performance improved significantly
+                    if performance_score > 0.8:  # 80% improvement threshold
+                        logger.info(f"Auto-merging training improvements (score: {performance_score:.2f})")
+                        
+                        # Merge training branch to main workflow state
+                        self._merge_training_improvements()
+                        
+                        # Broadcast successful auto-merge
+                        self.redis.xadd('nova.coordination.messages', {
+                            'timestamp': datetime.now().isoformat(),
+                            'from': self.nova_id,
+                            'to': 'all',
+                            'message': f'AUTO-MERGED: Training improvements with {performance_score:.1%} performance gain',
+                            'action': 'TRAINING_AUTO_MERGE',
+                            'modifications': self._training_modifications,
+                            'performance_gain': performance_score
+                        })
+                    else:
+                        logger.info(f"Training improvements below threshold (score: {performance_score:.2f}) - manual review required")
+                        
+                except Exception as e:
+                    logger.error(f"Failed to execute auto-merge logic: {e}")
+    
+    def _calculate_training_performance(self) -> float:
+        """Calculate performance improvement from training session"""
+        try:
+            # Get metrics before and after training
+            current_metrics = self.redis.hgetall(f'nova.metrics.{self.nova_id}')
+            baseline_metrics = self.redis.hgetall(f'nova.metrics.{self.nova_id}.baseline')
+            
+            if not baseline_metrics:
+                return 0.5  # No baseline, moderate score
+            
+            # Calculate improvement in key areas
+            improvements = []
+            
+            # Task completion rate improvement
+            current_completion = float(current_metrics.get('completion_rate', 0))
+            baseline_completion = float(baseline_metrics.get('completion_rate', 0))
+            if baseline_completion > 0:
+                improvements.append(current_completion / baseline_completion)
+            
+            # Response time improvement (lower is better)
+            current_response = float(current_metrics.get('avg_response_time', 100))
+            baseline_response = float(baseline_metrics.get('avg_response_time', 100))
+            if baseline_response > 0:
+                improvements.append(baseline_response / current_response)
+            
+            # Error rate improvement (lower is better)
+            current_errors = float(current_metrics.get('error_rate', 0))
+            baseline_errors = float(baseline_metrics.get('error_rate', 1))
+            improvements.append(baseline_errors / max(current_errors, 0.01))
+            
+            # Return average improvement score
+            return sum(improvements) / len(improvements) if improvements else 0.5
+            
+        except Exception as e:
+            logger.error(f"Failed to calculate training performance: {e}")
+            return 0.5
+    
+    def _merge_training_improvements(self):
+        """Merge training improvements into main workflow state"""
+        try:
+            # Update main state with training optimizations
+            training_state = self.redis.hgetall(f'workflow:training_state:{self.nova_id}')
+            main_state = self.redis.hgetall(f'workflow:state:{self.nova_id}')
+            
+            # Merge optimized parameters
+            merged_state = {**main_state, **training_state}
+            merged_state['last_training_merge'] = datetime.now().isoformat()
+            merged_state['training_modifications'] = str(self._training_modifications)
+            
+            # Update main state
+            self.redis.hset(f'workflow:state:{self.nova_id}', mapping=merged_state)
+            
+            # Clear training state
+            self.redis.delete(f'workflow:training_state:{self.nova_id}')
+            
+            logger.info("Successfully merged training improvements to main state")
+            
+        except Exception as e:
+            logger.error(f"Failed to merge training improvements: {e}")
+            raise
             
         except Exception as e:
             logger.error(f"Error finalizing training session: {e}")
