@@ -207,17 +207,74 @@ class TaskExecutor:
         return f"Message sent to {target}"
     
     def _handle_code_analysis(self, task_data: Dict) -> Dict:
-        """Analyze code (placeholder for now)"""
+        """Analyze code for quality, security, and performance issues"""
         file_path = task_data.get('file_path', '')
         analysis_type = task_data.get('analysis_type', 'basic')
         
-        # TODO: Implement actual code analysis
-        return {
-            'file': file_path,
-            'analysis': analysis_type,
-            'issues': 0,
-            'suggestions': []
-        }
+        if not file_path or not os.path.exists(file_path):
+            return {
+                'file': file_path,
+                'analysis': analysis_type,
+                'error': 'File not found',
+                'issues': 0,
+                'suggestions': []
+            }
+        
+        try:
+            with open(file_path, 'r') as f:
+                content = f.read()
+            
+            issues = []
+            suggestions = []
+            
+            # Basic security analysis
+            if 'password' in content.lower() and ('=' in content or ':' in content):
+                issues.append('SECURITY: Potential hardcoded password detected')
+                suggestions.append('Move sensitive data to environment variables')
+            
+            if 'api_key' in content.lower() and ('=' in content or ':' in content):
+                issues.append('SECURITY: Potential hardcoded API key detected')
+                suggestions.append('Use secure credential management')
+            
+            # Code quality analysis
+            if content.count('TODO') > 5:
+                issues.append('QUALITY: High number of TODO comments')
+                suggestions.append('Prioritize completing TODO items')
+            
+            if content.count('except:') > 0:
+                issues.append('QUALITY: Bare except clauses found')
+                suggestions.append('Use specific exception types')
+            
+            # Performance analysis
+            if 'time.sleep(' in content and file_path.endswith('.py'):
+                issues.append('PERFORMANCE: Sleep calls may impact performance')
+                suggestions.append('Consider async alternatives or shorter delays')
+            
+            # Python-specific analysis
+            if file_path.endswith('.py'):
+                lines = content.split('\n')
+                long_lines = [i+1 for i, line in enumerate(lines) if len(line) > 120]
+                if long_lines:
+                    issues.append(f'STYLE: Lines too long: {long_lines[:5]}...' if len(long_lines) > 5 else f'STYLE: Lines too long: {long_lines}')
+                    suggestions.append('Break long lines for better readability')
+            
+            return {
+                'file': file_path,
+                'analysis': analysis_type,
+                'issues': len(issues),
+                'problems': issues,
+                'suggestions': suggestions,
+                'lines_analyzed': len(content.split('\n'))
+            }
+            
+        except Exception as e:
+            return {
+                'file': file_path,
+                'analysis': analysis_type,
+                'error': f'Analysis failed: {str(e)}',
+                'issues': 0,
+                'suggestions': []
+            }
     
     def _handle_test_run(self, task_data: Dict) -> Dict:
         """Run tests"""
@@ -253,17 +310,78 @@ class TaskExecutor:
         }
     
     def _handle_deploy(self, task_data: Dict) -> Dict:
-        """Deploy application (placeholder)"""
+        """Deploy application using systemd services (no Docker/Kubernetes allowed)"""
         environment = task_data.get('environment', 'staging')
         version = task_data.get('version', 'latest')
+        service_name = task_data.get('service_name', 'nova-app')
         
-        # TODO: Implement actual deployment
-        return {
-            'environment': environment,
-            'version': version,
-            'status': 'simulated',
-            'url': f'https://{environment}.example.com'
-        }
+        try:
+            start_time = time.time()
+            deployment_steps = []
+            
+            # Validate environment
+            if environment not in ['staging', 'production', 'development']:
+                return {
+                    'success': False,
+                    'error': f'Invalid environment: {environment}',
+                    'environment': environment
+                }
+            
+            # Step 1: Check service status
+            result = subprocess.run(
+                f'systemctl is-active {service_name}',
+                shell=True, capture_output=True, text=True
+            )
+            current_status = result.stdout.strip()
+            deployment_steps.append(f'Current service status: {current_status}')
+            
+            # Step 2: Stop service if running
+            if current_status == 'active':
+                subprocess.run(f'sudo systemctl stop {service_name}', shell=True)
+                deployment_steps.append(f'Stopped {service_name}')
+            
+            # Step 3: Update service configuration (if needed)
+            config_path = f'/etc/systemd/system/{service_name}.service'
+            deployment_steps.append(f'Using config: {config_path}')
+            
+            # Step 4: Reload systemd and start service
+            subprocess.run('sudo systemctl daemon-reload', shell=True)
+            subprocess.run(f'sudo systemctl start {service_name}', shell=True)
+            deployment_steps.append(f'Started {service_name}')
+            
+            # Step 5: Enable service for auto-start
+            subprocess.run(f'sudo systemctl enable {service_name}', shell=True)
+            deployment_steps.append(f'Enabled {service_name} for auto-start')
+            
+            # Step 6: Verify deployment
+            time.sleep(2)  # Give service time to start
+            verify_result = subprocess.run(
+                f'systemctl is-active {service_name}',
+                shell=True, capture_output=True, text=True
+            )
+            
+            deployment_time = time.time() - start_time
+            success = verify_result.stdout.strip() == 'active'
+            
+            return {
+                'success': success,
+                'environment': environment,
+                'version': version,
+                'service': service_name,
+                'status': verify_result.stdout.strip(),
+                'deployment_time': round(deployment_time, 2),
+                'steps': deployment_steps,
+                'method': 'systemd'
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'environment': environment,
+                'version': version,
+                'error': f'Deployment failed: {str(e)}',
+                'method': 'systemd'
+            }
     
     def _handle_unknown(self, task_data: Dict) -> str:
         """Handle unknown task types"""
