@@ -1,0 +1,14 @@
+{
+  "hooks": [
+    {
+      "type": "precompact",
+      "command": "/nfs/projects/claude-code-Tmux-Orchestrator/.claude/hooks/precompact_notification.sh",
+      "outputFormat": "json"
+    },
+    {
+      "type": "stop",
+      "command": "/nfs/projects/claude-code-Tmux-Orchestrator/.claude/hooks/torch_turbo_stop.sh",
+      "outputFormat": "json"
+    }
+  ]
+}
