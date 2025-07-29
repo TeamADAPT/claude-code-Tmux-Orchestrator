@@ -322,8 +322,44 @@ class LoopDetector:
         Evidence: {result.evidence}
         """)
         
-        # TODO: Post to safety alert stream
-        # TODO: Trigger emergency protocols
+        # Post safety alert to stream
+        try:
+            alert_data = {
+                'timestamp': datetime.now().isoformat(),
+                'nova_id': self.nova_id,
+                'alert_type': 'LOOP_DETECTED',
+                'pattern': result.pattern_type,
+                'severity': result.severity,
+                'description': result.pattern_description,
+                'action': result.recommended_action,
+                'evidence': result.evidence
+            }
+            self.redis.xadd('nova.safety.alerts', alert_data)
+            self.logger.info("Posted safety alert to stream")
+        except Exception as e:
+            self.logger.error(f"Failed to post safety alert: {e}")
+        
+        # Trigger emergency protocols based on severity
+        if result.severity in ['CRITICAL', 'HIGH']:
+            try:
+                # Emergency cooldown activation
+                cooldown_duration = 300 if result.severity == 'CRITICAL' else 120
+                self.redis.set(f'nova.emergency.cooldown.{self.nova_id}', '1', ex=cooldown_duration)
+                
+                # Notify other Novas of emergency
+                emergency_msg = {
+                    'timestamp': datetime.now().isoformat(),
+                    'from': self.nova_id,
+                    'to': 'all',
+                    'message': f'EMERGENCY: {result.pattern_type} detected in {self.nova_id}',
+                    'severity': result.severity,
+                    'action': 'EMERGENCY_COOLDOWN_ACTIVATED'
+                }
+                self.redis.xadd('nova.coordination.messages', emergency_msg)
+                
+                self.logger.critical(f"Emergency protocols activated - {cooldown_duration}s cooldown")
+            except Exception as e:
+                self.logger.error(f"Failed to trigger emergency protocols: {e}")
     
     def get_detection_status(self) -> Dict:
         """Get current detection status for monitoring"""

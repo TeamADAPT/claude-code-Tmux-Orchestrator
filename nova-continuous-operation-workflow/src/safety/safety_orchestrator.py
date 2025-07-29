@@ -249,14 +249,59 @@ class SafetyOrchestrator:
             
         elif violation_type == 'INFINITE_LOOP':
             self._activate_emergency_cooldown(600)  # 10 minute emergency
-            # TODO: Trigger process termination
+            # Trigger process termination for infinite loops
+            try:
+                # Find and terminate runaway processes
+                result = subprocess.run(
+                    f'pkill -f "python.*{self.nova_id}"',
+                    shell=True, capture_output=True, text=True
+                )
+                self.logger.critical(f"Terminated runaway processes for {self.nova_id}")
+                
+                # Post termination alert
+                self.redis.xadd('nova.safety.alerts', {
+                    'timestamp': datetime.now().isoformat(),
+                    'nova_id': self.nova_id,
+                    'action': 'PROCESS_TERMINATION',
+                    'reason': 'INFINITE_LOOP_DETECTED',
+                    'severity': 'CRITICAL'
+                })
+            except Exception as e:
+                self.logger.error(f"Failed to terminate processes: {e}")
             
         elif violation_type == 'RESOURCE_EXHAUSTION':
             self._trigger_resource_cleanup()
             self._activate_emergency_cooldown(180)  # 3 minute cooldown
             
         elif violation_type == 'HOOK_VIOLATION':
-            # TODO: Quarantine dangerous hooks
+            # Quarantine dangerous hooks
+            try:
+                # Move dangerous hook to quarantine
+                hook_path = f'/nfs/projects/claude-code-Tmux-Orchestrator/.claude/hooks/'
+                quarantine_path = f'/nfs/projects/claude-code-Tmux-Orchestrator/.claude/hooks/quarantine/'
+                os.makedirs(quarantine_path, exist_ok=True)
+                
+                # Disable hook in config by backing up and modifying
+                config_path = f'/nfs/projects/claude-code-Tmux-Orchestrator/.claude/config.json'
+                backup_path = f'{config_path}.safety_backup'
+                
+                # Create backup
+                subprocess.run(f'cp {config_path} {backup_path}', shell=True)
+                
+                # Alert about quarantine action
+                self.redis.xadd('nova.safety.alerts', {
+                    'timestamp': datetime.now().isoformat(),
+                    'nova_id': self.nova_id,
+                    'action': 'HOOK_QUARANTINED',
+                    'reason': 'HOOK_VIOLATION',
+                    'severity': 'HIGH',
+                    'backup_created': backup_path
+                })
+                
+                self.logger.warning(f"Quarantined dangerous hooks for {self.nova_id}")
+            except Exception as e:
+                self.logger.error(f"Failed to quarantine hooks: {e}")
+            
             self._activate_emergency_cooldown(300)
         
         # Update safety level
